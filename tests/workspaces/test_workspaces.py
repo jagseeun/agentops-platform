@@ -24,4 +24,10 @@ def test_create_workspace_add_duplicate_values() -> None:
         "/workspaces",
         json={"name": "Acme", "slug": "acme"},
     )
-    assert response.status_code == 409
+    assert response.status_code == 201
+    
+    duplicate_response = client.post(
+        "/workspaces",
+        json={"name":"Acme Duplicate", "slug":"acme"}
+    )
+    assert duplicate_response.status_code == 409

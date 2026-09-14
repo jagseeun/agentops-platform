@@ -36,6 +36,16 @@ def set_run_running_started_at(run_id: int, started_at: datetime)->None:
     finally:
         db.close()
 
+def complete_running_runs()->None:
+    db=SessionLocal()
+    try : 
+        db.query(Run).filter(Run.status=="running").update(
+            {"status":"completed"}
+        )
+        db.commit()
+    finally:
+        db.close() 
+
 def test_process_next_queued_run_completes_oldest_queued_run() -> None:
     clear_queued_runs()
     workspace_id = create_workspace("Polling Worker")
@@ -167,7 +177,56 @@ def test_process_run_marks_failed_when_step_fails(monkeypatch)->None:
     finally:
         db.close()
 
+def test_fail_timed_out_runs_keeps_recent_running_run()->None:
+    complete_running_runs()
+    workspace_id = create_workspace("Recent Running Run")
+    agent_id = create_agent(workspace_id, "recent-running-agent")
+    workflow_id = create_workflow(workspace_id, agent_id)
+    run_id = create_run(workspace_id, workflow_id)
+    set_run_running_started_at(
+        run_id = run_id,
+        started_at=datetime.now(),
+    )
+    failed_count = fail_timed_out_runs(timeout_seconds=60)
+    db = SessionLocal()
+    try:
+        run = db.get(Run,run_id)
+        assert failed_count==0
+        assert run is not None
+        assert run.status == "running"
+    finally:
+        db.close()
+        
+def test_fail_timed_out_runs_returns_zero_when_no_runs_timed_out()->None:
+    complete_running_runs()
+    failed_count = fail_timed_out_runs(timeout_seconds=60)
+    
+    assert failed_count == 0
+
+def test_fail_timed_out_runs_marks_one_old_running_run_failed()->None:
+    complete_running_runs()
+    workspace_id = create_workspace("Single Timeout Run")
+    agent_id = create_agent(workspace_id, "single-timeout-agent")
+    workflow_id = create_workflow(workspace_id, agent_id)
+    run_id = create_run(workspace_id, workflow_id)
+    
+    set_run_running_started_at(
+        run_id = run_id,
+        started_at=datetime.now()-timedelta(seconds=120),
+    )
+    failed_count = fail_timed_out_runs(timeout_seconds=120)
+    db = SessionLocal()
+    try : 
+        run = db.get(Run, run_id)
+        assert failed_count == 1
+        assert run is not None
+        assert run.status == "failed"
+    finally:
+        db.close()
+
+
 def test_fail_timed_out_runs_marks_old_running_run_failed() -> None:
+    complete_running_runs()
     workspace_id = create_workspace("Multiple Timeout Run")
     agent_id = create_agent(workspace_id, "multiple-timeout-agent")
     workflow_id = create_workflow(workspace_id, agent_id)
@@ -187,7 +246,7 @@ def test_fail_timed_out_runs_marks_old_running_run_failed() -> None:
         first_run = db.get(Run, first_run_id)
         second_run = db.get(Run, second_run_id)
         
-        assert failed_count >= 2
+        assert failed_count == 2
         assert first_run is not None
         assert second_run is not None
         assert first_run.status == "failed"

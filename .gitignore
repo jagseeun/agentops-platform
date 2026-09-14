@@ -7,16 +7,21 @@ wheels/
 *.egg-info
 
 # Virtual environments
-.venv
+.venv/
+
+# Environment
 .env.*
 .env
-# Environment
-.env
+!.env.example
 
-# Test cache
+# Databases
+*.db
+
+# Test and lint cache
 .pytest_cache/
+.ruff_cache/
 
-# IDE
+# IDE       
 .vscode/
 .idea/
 LEARNING_WORKFLOW.md

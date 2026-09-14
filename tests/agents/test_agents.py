@@ -40,6 +40,46 @@ def test_create_agents()->None:
     )
     assert response.status_code == 409
 
+def test_create_agent_forbidden_when_header_workspace_differs_from_body()->None:
+    header_workspace_response = client.post(
+        "/workspaces",
+        json={
+            "name":"Header Workspace",
+            "slug" : unique_slug("header_workspace_test"),
+        },
+    )
+    assert header_workspace_response.status_code == 201
+    header_workspace_id = header_workspace_response.json()["id"]
+    
+    body_workspace_response = client.post(
+        "/workspaces",
+        json={
+            "name" : "Body Workspace",
+            "slug" : unique_slug("body_workspace_test")
+        },
+    )
+    assert body_workspace_response.status_code == 201
+    body_workspace_id = body_workspace_response.json()["id"]
+    
+    response = client.post(
+        "/agents",
+        json={
+            "workspace_id" : body_workspace_id,
+            "name":"mismatch-agent",
+            "version": "1.0.0",
+        },
+        headers = auth_headers(header_workspace_id, role="admin"),
+    )
+    assert response.status_code == 403
+    
+    list_response = client.get(
+        f"/workspaces/{body_workspace_id}/agents",
+        headers=auth_headers(body_workspace_id, role="viewer"),
+    )
+    assert list_response.status_code==200
+    assert list_response.json()==[]
+    
+
 def test_existing_workspace_id() -> None:
     with SessionLocal() as db:
         max_workspace_id = (

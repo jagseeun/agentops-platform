@@ -1,13 +1,9 @@
 from fastapi import FastAPI
 
-from app.db.base import Base
-from app.db.session import engine
-
 from app.api.routes.workspaces import router as workspaces_router
 from app.api.routes.agents import router as agent_router
 
 from app.api.routes.runs import router as runs_router
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="AgentOps Mini Platform")
 

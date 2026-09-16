@@ -24,3 +24,19 @@
 
 - health endpoint를 확인한다.
 `Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8000/health`
+
+## PostgreSQL smoke test
+- PostgreSQL 컨테이너를 실행한다.
+`docker compose up -d postgres`
+
+- migration을 적용한다.
+`uv run alembic upgrade head`
+
+- API를 실행한다.
+`uv run uvicorn app.main:app --reload`
+
+- 다른 터미널에서 smoke test를 실행한다.
+`uv run python tools/postgres_smoke.py`
+
+- 기대 결과는 다음과 같다.
+`PostgreSQL smoke test passed`

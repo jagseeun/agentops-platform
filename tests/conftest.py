@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import os 
-import shutil
-import tempfile
+from app.core.config import settings
 from pathlib import Path
 from collections.abc import Generator
 
@@ -12,25 +10,29 @@ from sqlalchemy.orm import Session
 
 from app.db import session as db_session
 
-_TEST_DB_DIR: Path | None = None
 
-def _default_test_database_url()->str:
-    global _TEST_DB_DIR
+def _assert_safe_test_database_url(database_url: str, development_database_url: str)->None:
+    test_url = make_url(database_url)
+    development_url = make_url(development_database_url)
     
-    _TEST_DB_DIR = Path(tempfile.mkdtemp(prefix="agentops-tests"))
-    test_db_path = _TEST_DB_DIR / "agentops_test.db"
-    
-    return f"sqlite:///{test_db_path.as_posix()}"
-
-def _asssert_safe_test_database_url(database_url: str)->None:
-    url = make_url(database_url)
-    if url.get_backend_name() == "sqlite" and url.database:
-        if Path(url.database).name == "agentops.db":
-            raise RuntimeError("Tests must not user development database agentops.db")
+    if test_url.render_as_string(hide_password=True) == development_url.render_as_string(hide_password=True):
+        raise RuntimeError("TEST_DATABASE_URL must not be the same as DATABASE_URL")
+    database_name = test_url.database
+    if not database_name:
+        raise RuntimeError("TEST_DATABASAE_URL must include a database name")
+    if not database_name.endswith("_test"):
+        safe_url = test_url.render_as_string(hide_password=True)
+        raise RuntimeError(
+            f"TEST_DATABASE_URL must point to a database ending with _test : {safe_url}"
+        )
         
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL") or _default_test_database_url()
+TEST_DATABASE_URL = settings.test_database_url
+DATABASE_URL = settings.database_url
 
-_asssert_safe_test_database_url(TEST_DATABASE_URL)
+if TEST_DATABASE_URL is None:
+    raise RuntimeError("TEST_DATABASE_URL is required for tests")
+
+_assert_safe_test_database_url(TEST_DATABASE_URL, DATABASE_URL)
 
 test_engine = create_engine(
     TEST_DATABASE_URL,
@@ -57,8 +59,3 @@ from app.main import app
 Base.metadata.create_all(bind=test_engine)
 app.dependency_overrides[db_session.get_db] = override_get_db
 
-def pytest_sessionfinish(session, exitstatus)->None:
-    test_engine.dispose()
-    
-    if _TEST_DB_DIR is not None:
-        shutil.rmtree(_TEST_DB_DIR, ignore_errors=True)

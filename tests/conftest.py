@@ -4,6 +4,8 @@ from app.core.config import settings
 from pathlib import Path
 from collections.abc import Generator
 
+import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
@@ -58,4 +60,9 @@ from app.main import app
 
 Base.metadata.create_all(bind=test_engine)
 app.dependency_overrides[db_session.get_db] = override_get_db
+
+@pytest.fixture
+def client()->Generator[TestClient, None, None]:
+    with TestClient(app) as test_client:
+        yield test_client
 

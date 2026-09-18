@@ -6,7 +6,7 @@ from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
@@ -60,6 +60,26 @@ from app.main import app
 
 Base.metadata.create_all(bind=test_engine)
 app.dependency_overrides[db_session_module.get_db] = override_get_db
+
+def _reset_test_database()->None:
+    with test_engine.begin() as connection:
+        if test_engine.dialect.name == "postgresql":
+            table_names = ", ".join(
+                f'"{table.name}"' for table in Base.metadata.sorted_tables
+            )
+            if table_names:
+                connection.execute(
+                    text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE")
+                )
+        else:
+            for table in reversed(Base.metadata.sorted_tables):
+                connection.execute(table.delete())
+
+@pytest.fixture(autouse=True)
+def reset_test_database()->Generator[None,None,None]:
+    _reset_test_database()
+    yield
+    _reset_test_database()
 
 @pytest.fixture
 def client()->Generator[TestClient, None, None]:

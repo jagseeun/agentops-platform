@@ -1,21 +1,9 @@
-from fastapi.testclient import TestClient
 from uuid import uuid4
-
-from app.main import app
-
-client = TestClient(app)
 
 def unique_slug(prefix: str) -> str:
     return f"{prefix}_{uuid4().hex}"
 
-def auth_headers(workspace_id : int, role : str = "admin")->dict[str, str]:
-    return{
-        "X-User-Id" : "1",
-        "X-Workspace-Id" : str(workspace_id),
-        "X-User-Role": role,
-    }
-
-def test_list_agent_allowed_whn_url_workspace_matches_header() -> None:
+def test_list_agent_allowed_whn_url_workspace_matches_header(client, auth_headers) -> None:
     workspace_response = client.post(
         "/workspaces",
         json ={"name":"Context Match", "slug": unique_slug("context_match_workspace_test")},
@@ -29,7 +17,7 @@ def test_list_agent_allowed_whn_url_workspace_matches_header() -> None:
     )
     assert response.status_code==200
     
-def test_list_agents_forbidden_when_url_workspace_differs_from_header()->None:
+def test_list_agents_forbidden_when_url_workspace_differs_from_header(client, auth_headers)->None:
     workspace_response = client.post(
         "/workspaces",
         json={"name":"Context Mismatch", "slug": unique_slug("context_mismatch_workspace_test")},

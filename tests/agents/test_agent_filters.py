@@ -1,21 +1,11 @@
-from fastapi.testclient import TestClient
 from uuid import uuid4
 
-from app.main import app
-
-client = TestClient(app)
 
 def unique_slug(prefix: str) -> str:
     return f"{prefix}_{uuid4().hex}"
 
-def auth_headers(workspace_id: int, role: str = "admin") -> dict[str, str]:
-    return {
-        "X-User-Id": "1",
-        "X-Workspace-Id": str(workspace_id),
-        "X-User-Role": role,
-    }
 
-def test_inactive_filter_returns_inactive_agents()->None:
+def test_inactive_filter_returns_inactive_agents(client, auth_headers)->None:
     workspace_response = client.post(
         "/workspaces",
         json={"name":"Inactive Filter", "slug" : unique_slug("inactive_filter_workspace_test")},

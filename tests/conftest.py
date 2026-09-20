@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.core.config import settings
 from pathlib import Path
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -93,3 +93,13 @@ def db_session()->Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+        
+@pytest.fixture
+def auth_headers()->Callable[[int, str], dict[str,str]]:
+    def _auth_headers(workspace_id: int, role: str = "admin") -> dict[str,str]:
+        return{
+            "X-User-Id":"1",
+            "X-Workspace-Id":str(workspace_id),
+            "X-User-Role":role,
+        }
+    return _auth_headers

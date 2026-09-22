@@ -13,6 +13,8 @@ from app.services.run_event_service import RunEventService
 
 from app.repositories.audit_log_repository import AuditLogRepository
 
+from app.workers.tasks import process_run_task
+
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["runs"])
 
 @router.post("/workflows/{workflow_id}/runs", response_model=RunRead, status_code = status.HTTP_201_CREATED,)
@@ -43,6 +45,7 @@ def create_run(
             "status":run.status,
         },
     )
+    process_run_task.delay(run.id)
     return run
 
 @router.get("/runs/{run_id}", response_model=RunRead)

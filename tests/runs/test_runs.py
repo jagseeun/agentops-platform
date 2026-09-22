@@ -119,6 +119,29 @@ class TestCreateRun:
             headers=auth_headers(workspace_id=workspace_id, role="admin"),
         )
         assert response.status_code==404
+    def test_create_run_enqueues_process_run_task_after_commit(self, monkeypatch)->None:
+        workspace_id = create_workspace("Run Enqueue")
+        agent_id = create_agent(workspace_id, "run-enqueue-agent")
+        workflow_id = create_workflow(workspace_id, agent_id)
+        enqueued_run_ids = []
+        
+        def fake_delay(run_id:int)->None:
+            db = SessionLocal()
+            try:
+                run=db.get(Run, run_id)
+                assert run is not None
+                assert run.status == "queued"
+            finally: 
+                db.close()
+            enqueued_run_ids.append(run_id)
+        monkeypatch.setattr(
+            "app.api.routes.runs.process_run_task.delay",
+            fake_delay,
+        )
+        response = create_run(workspace_id, workflow_id, role="admin")
+        
+        assert response.status_code == 201
+        assert enqueued_run_ids == [response.json()["id"]]
         
 class TestGetRun:
     def test_get_run_returns_data(self)->None:

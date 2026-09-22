@@ -11,6 +11,7 @@ from app.workers.run_worker import (
     process_next_queued_run,
     process_run
 )
+from app.workers.tasks import process_run_task
 from app.models.model_call import ModelCall
 
 client = TestClient(app)
@@ -328,3 +329,24 @@ def test_failed_provider_run_can_be_explained_from_timeline()->None:
         "run_failed",
     ]
     assert data["events"][2]["message"] == "fake provider failure"
+
+def test_process_run_task_completes_queued_run()->None:
+    workspace_id = create_workspace("Celery Task Worker")
+    agent_id = create_agent(workspace_id, "celery-task-agent")
+    workflow_id = create_workflow(workspace_id, agent_id)
+    run_id = create_run(workspace_id, workflow_id)
+    
+    process_run_task(run_id)
+    
+    db = SessionLocal()
+    try:
+        run=db.get(Run, run_id)
+        assert run is not None
+        assert run.status == "completed"
+        assert run.started_at is not None
+        assert run.finished_at is not None
+    finally:
+        db.close()
+        
+def test_process_run_task_ignores_missing_run_id()->None:
+    process_run_task.run(999999999)

@@ -7,6 +7,7 @@ from app.main import app
 from app.models.run import Run
 from app.models.workflow import Workflow
 from app.workers.run_worker import (
+    claim_queued_run,
     fail_timed_out_runs,
     process_next_queued_run,
     process_run
@@ -350,3 +351,25 @@ def test_process_run_task_completes_queued_run()->None:
         
 def test_process_run_task_ignores_missing_run_id()->None:
     process_run_task.run(999999999)
+    
+def test_claim_queued_run_only_succeeds_once()->None:
+    workspace_id = create_workspace("Atomic Claim")
+    agent_id = create_agent(workspace_id, "atomic-claim-agent")
+    workflow_id = create_workflow(workspace_id, agent_id)
+    run_id = create_run(workspace_id, workflow_id)
+    
+    first_db = SessionLocal()
+    second_db = SessionLocal()
+    
+    try:
+        first_claim = claim_queued_run(first_db, run_id)
+        second_claim = claim_queued_run(second_db, run_id)
+        
+        assert first_claim is not None
+        assert first_claim.id == run_id
+        assert first_claim.status == "running"
+        assert second_claim is None
+    finally:
+        first_db.close()
+        second_db.close()
+    

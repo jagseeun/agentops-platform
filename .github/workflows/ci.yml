@@ -1,0 +1,55 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+      - feat/ci-cd-deployment
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: agentops
+          POSTGRES_USER: agentops
+          POSTGRES_PASSWORD: agentops
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agentops -d agentops"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+          
+    env:
+      DATABASE_URL: postgresql+psycopg://agentops:agentops@localhost:5432/agentops
+      TEST_DATABASE_URL: postgresql+psycopg://agentops:agentops@localhost:5432/agentops_test
+      CELERY_BROKER_URL: redis://localhost:6379/0
+    
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Create test database
+        run: |
+          PGPASSWORD=agentops psql -h localhost -U agentops -d agentops -c "CREATE DATABASE agentops_test;"
+      - name: Run migrations
+        run: uv run alembic upgrade head
+      - name: Run tests
+        run: uv run pytest -q

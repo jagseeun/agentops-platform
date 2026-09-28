@@ -103,3 +103,10 @@ def auth_headers()->Callable[[int, str], dict[str,str]]:
             "X-User-Role":role,
         }
     return _auth_headers
+
+@pytest.fixture(autouse=True)
+def disable_process_run_task_delay(monkeypatch)->None:
+    monkeypatch.setattr(
+        "app.api.routes.runs.process_run_task.delay",
+        lambda run_id: None,
+    )

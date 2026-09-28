@@ -1,36 +1,40 @@
 from __future__ import annotations
 
-import os 
-import shutil
-import tempfile
+from app.core.config import settings
 from pathlib import Path
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 
-from sqlalchemy import create_engine
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-from app.db import session as db_session
+from app.db import session as db_session_module
 
-_TEST_DB_DIR: Path | None = None
 
-def _default_test_database_url()->str:
-    global _TEST_DB_DIR
+def _assert_safe_test_database_url(database_url: str, development_database_url: str)->None:
+    test_url = make_url(database_url)
+    development_url = make_url(development_database_url)
     
-    _TEST_DB_DIR = Path(tempfile.mkdtemp(prefix="agentops-tests"))
-    test_db_path = _TEST_DB_DIR / "agentops_test.db"
-    
-    return f"sqlite:///{test_db_path.as_posix()}"
-
-def _asssert_safe_test_database_url(database_url: str)->None:
-    url = make_url(database_url)
-    if url.get_backend_name() == "sqlite" and url.database:
-        if Path(url.database).name == "agentops.db":
-            raise RuntimeError("Tests must not user development database agentops.db")
+    if test_url.render_as_string(hide_password=True) == development_url.render_as_string(hide_password=True):
+        raise RuntimeError("TEST_DATABASE_URL must not be the same as DATABASE_URL")
+    database_name = test_url.database
+    if not database_name:
+        raise RuntimeError("TEST_DATABASE_URL must include a database name")
+    if not database_name.endswith("_test"):
+        safe_url = test_url.render_as_string(hide_password=True)
+        raise RuntimeError(
+            f"TEST_DATABASE_URL must point to a database ending with _test : {safe_url}"
+        )
         
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL") or _default_test_database_url()
+TEST_DATABASE_URL = settings.test_database_url
+DATABASE_URL = settings.database_url
 
-_asssert_safe_test_database_url(TEST_DATABASE_URL)
+if TEST_DATABASE_URL is None:
+    raise RuntimeError("TEST_DATABASE_URL is required for tests")
+
+_assert_safe_test_database_url(TEST_DATABASE_URL, DATABASE_URL)
 
 test_engine = create_engine(
     TEST_DATABASE_URL,
@@ -39,11 +43,11 @@ test_engine = create_engine(
     else {},
 )
 
-db_session.engine = test_engine
-db_session.SessionLocal.configure(bind=test_engine)
+db_session_module.engine = test_engine
+db_session_module.SessionLocal.configure(bind=test_engine)
 
 def override_get_db()->Generator[Session, None, None]:
-    db = db_session.SessionLocal()
+    db = db_session_module.SessionLocal()
     try:
         yield db
     finally:
@@ -55,10 +59,47 @@ from app.db.base import Base
 from app.main import app
 
 Base.metadata.create_all(bind=test_engine)
-app.dependency_overrides[db_session.get_db] = override_get_db
+app.dependency_overrides[db_session_module.get_db] = override_get_db
 
-def pytest_sessionfinish(session, exitstatus)->None:
-    test_engine.dispose()
-    
-    if _TEST_DB_DIR is not None:
-        shutil.rmtree(_TEST_DB_DIR, ignore_errors=True)
+def _reset_test_database()->None:
+    with test_engine.begin() as connection:
+        if test_engine.dialect.name == "postgresql":
+            table_names = ", ".join(
+                f'"{table.name}"' for table in Base.metadata.sorted_tables
+            )
+            if table_names:
+                connection.execute(
+                    text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE")
+                )
+        else:
+            for table in reversed(Base.metadata.sorted_tables):
+                connection.execute(table.delete())
+
+@pytest.fixture(autouse=True)
+def reset_test_database()->Generator[None,None,None]:
+    _reset_test_database()
+    yield
+    _reset_test_database()
+
+@pytest.fixture
+def client()->Generator[TestClient, None, None]:
+    with TestClient(app) as test_client:
+        yield test_client
+        
+@pytest.fixture
+def db_session()->Generator[Session, None, None]:
+    db = db_session_module.SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+        
+@pytest.fixture
+def auth_headers()->Callable[[int, str], dict[str,str]]:
+    def _auth_headers(workspace_id: int, role: str = "admin") -> dict[str,str]:
+        return{
+            "X-User-Id":"1",
+            "X-Workspace-Id":str(workspace_id),
+            "X-User-Role":role,
+        }
+    return _auth_headers

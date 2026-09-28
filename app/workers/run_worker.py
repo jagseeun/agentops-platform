@@ -1,5 +1,6 @@
 from app.db.session import SessionLocal
 from app.models.run import Run
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 from app.services.model_gateway import ModelGateway
 from app.models.workflow_step import WorkflowStep
@@ -24,22 +25,32 @@ def process_next_queued_run()->bool:
     process_run(run_id)
     return True
 
+def claim_queued_run(db: Session, run_id: int)->Run|None:
+    started_at = datetime.now()
+    result =db.execute(
+        update(Run)
+        .where(Run.id == run_id, Run.status == "queued")
+        .values(status="running", started_at=started_at)
+        .returning(Run.id)
+    )
+    claimed_run_id = result.scalar_one_or_none()
+    
+    if claimed_run_id is None:
+        db.rollback()
+        return None
+    db.commit()
+    run = db.get(Run, claimed_run_id)
+    if run is None:
+        return None
+    return run
+
 def process_run(run_id : int)-> None:
     db = SessionLocal()
-    try:
-        run = db.get(Run, run_id)
+    try: 
+        run = claim_queued_run(db, run_id)
         if run is None:
             return
-        if run.status != "queued":
-            return
-        
         event_repository = RunEventRepository(db)
-        
-        run.status = "running"
-        run.started_at = datetime.now()
-        db.commit()
-        db.refresh(run)
-        
         event_repository.create(
             workspace_id = run.workspace_id,
             run_id = run.id,

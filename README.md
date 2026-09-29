@@ -56,6 +56,8 @@ Run 처리 흐름은 다음과 같습니다.
 - Pytest
 - Docker Compose
 - GitHub Actions
+- GitHub Container Registry
+- Kubernetes
 - uv
 
 ## 주요 기능
@@ -72,6 +74,8 @@ Run 처리 흐름은 다음과 같습니다.
 - PostgreSQL migration 관리
 - 테스트 DB 안전장치
 - GitHub Actions 기반 CI 테스트 자동화
+- Docker image build와 GHCR publishing workflow
+- Kubernetes manifest 초안
 
 ## 주요 API
 
@@ -153,6 +157,58 @@ CI는 push 또는 `main` 대상 pull request에서 실행되며, GitHub Actions 
 5. Alembic migration 적용
 6. `pytest` 실행
 
+## Deployment Pipeline
+
+이 프로젝트는 배포 자동화로 가기 위한 기본 파이프라인을 구성했습니다.
+
+현재 자동화된 범위는 다음과 같습니다.
+
+- Pull request에서 pytest CI 실행
+- Pull request에서 Docker image build 검증
+- `main` push에서 Docker image build
+- `main` push에서 GHCR로 Docker image publish
+
+현재 Docker image는 다음 이름으로 publish됩니다.
+
+```text
+ghcr.io/jagseeun/agentops-platform:latest
+ghcr.io/jagseeun/agentops-platform:<commit-sha>
+```
+
+`latest`는 최신 main image를 가리키고, `commit-sha` tag는 특정 commit으로 만든 image를 추적하기 위해 사용합니다.
+
+아직 실제 Kubernetes 클러스터에 자동 배포하는 단계까지는 구현하지 않았습니다.
+
+## Kubernetes Manifests
+
+Kubernetes 배포 초안은 다음 폴더에 있습니다.
+
+```text
+deploy/kubernetes/
+```
+
+현재 manifest는 API, Worker, ConfigMap, Secret 예시, Service, 로컬 검증용 PostgreSQL/Redis 리소스를 포함합니다.
+
+```text
+api-deployment.yaml
+worker-deployment.yaml
+api-service.yaml
+configmap.yaml
+secret.example.yaml
+postgres-deployment.yaml
+postgres-service.yaml
+redis-deployment.yaml
+redis-service.yaml
+```
+
+로컬 Docker Desktop Kubernetes에서 dry-run 검증을 완료했습니다.
+
+```powershell
+kubectl apply --dry-run=client -f deploy/kubernetes
+```
+
+PostgreSQL과 Redis manifest는 로컬 Kubernetes 검증용입니다. 운영 환경에서는 Neon DB 같은 managed PostgreSQL과 managed Redis 사용을 전제로 합니다.
+
 ## Migration
 
 현재 migration 상태 확인:
@@ -210,5 +266,7 @@ API와 Worker는 같은 PostgreSQL과 Redis를 바라봅니다.
 - Run atomic claim
 - Docker Compose 기반 API, Worker, DB, Redis 통합 실행
 - GitHub Actions 기반 pytest CI
+- GHCR image publishing workflow
+- Kubernetes manifest 초안과 dry-run 검증
 
-다음 단계는 인증/인가 고도화, observability 강화, CI/CD, 배포 자동화입니다.
+다음 단계는 인증/인가 고도화, observability 강화, 실제 Kubernetes 배포 검증, cloud database 연결입니다.

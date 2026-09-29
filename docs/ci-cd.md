@@ -289,6 +289,22 @@ id | name      | slug
 
 이 검증으로 로컬 Kubernetes에서 API, Worker, Postgres, Redis가 함께 실행되고, API 요청이 Kubernetes 안의 Postgres에 저장되는 흐름을 확인했다.
 
+### Local database note
+
+`postgres-deployment.yaml`과 `redis-deployment.yaml`은 로컬 Kubernetes 검증용이다.
+
+운영 환경에서는 Kubernetes 안에 직접 DB를 띄우기보다 Neon DB 같은 managed PostgreSQL과 managed Redis 사용을 전제로 한다.
+
+### Cleanup
+
+로컬 Kubernetes 실습 리소스는 namespace 단위로 삭제한다.
+
+```powershell
+kubectl delete namespace agentops
+```
+
+이 명령은 `agentops` namespace 안에 만든 API, Worker, Postgres, Redis, Service, Secret, ConfigMap을 모두 삭제한다.
+
 ## 현재 흐름
 
 현재 검증 흐름은 다음과 같다.

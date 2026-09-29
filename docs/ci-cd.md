@@ -295,6 +295,65 @@ id | name      | slug
 
 운영 환경에서는 Kubernetes 안에 직접 DB를 띄우기보다 Neon DB 같은 managed PostgreSQL과 managed Redis 사용을 전제로 한다.
 
+### Neon DB 연결 검증
+
+Neon DB는 managed PostgreSQL로 사용한다.
+
+로컬 PowerShell에서 `DATABASE_URL`을 Neon connection string으로 임시 설정하고 SQLAlchemy 연결을 확인했다.
+
+주의:
+
+- Neon connection string에는 비밀번호가 포함되므로 repository와 문서에 기록하지 않는다.
+- 로컬 검증에서는 PowerShell 환경 변수로만 임시 설정한다.
+- Kubernetes에서는 실제 값을 `Secret`으로 주입한다.
+
+연결 확인:
+
+```powershell
+uv run python -c "from app.db.session import engine; print(engine.url.render_as_string(hide_password=True)); print(engine.connect().exec_driver_sql('select 1').scalar())"
+```
+
+확인 결과:
+
+```text
+postgresql+psycopg://neondb_owner:***@...neon.tech/neondb?...
+1
+```
+
+Neon DB는 새 DB였기 때문에 Alembic migration을 적용했다.
+
+```powershell
+uv run alembic upgrade head
+```
+
+확인 결과:
+
+```text
+Running upgrade  -> 92a89413b8f7, initial schema
+```
+
+FastAPI를 Neon DB에 연결한 상태로 실행한 뒤 Workspace 생성을 확인했다.
+
+```powershell
+$slug = "neon-" + [guid]::NewGuid().ToString("N")
+$workspace = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8001/workspaces" -ContentType "application/json" -Body (@{ name = "Neon Smoke"; slug = $slug } | ConvertTo-Json)
+$workspace
+```
+
+Neon DB에서 row 직접 조회도 확인했다.
+
+```powershell
+uv run python -c "from app.db.session import engine; print(engine.connect().exec_driver_sql('select id, name, slug from workspaces').all())"
+```
+
+확인 결과:
+
+```text
+[(1, 'Neon Smoke', 'neon-...')]
+```
+
+이 검증으로 로컬 FastAPI 코드가 Neon PostgreSQL에 연결되고, migration과 write/read가 정상 동작하는 것을 확인했다.
+
 ### Cleanup
 
 로컬 Kubernetes 실습 리소스는 namespace 단위로 삭제한다.

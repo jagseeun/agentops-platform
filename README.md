@@ -1,5 +1,7 @@
 # AgentOps Platform
 
+[![CI](https://github.com/jagseeun/agentops-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/jagseeun/agentops-platform/actions/workflows/ci.yml)
+
 AI Agent의 실행 흐름을 운영 가능한 백엔드 구조로 다루기 위한 플랫폼 프로젝트입니다.
 
 이 저장소는 처음에는 `agentops-mini`로 시작했지만, 현재는 PostgreSQL, Alembic, Redis, Celery를 붙여 실제 서비스에 가까운 구조로 확장한 상태입니다.
@@ -53,6 +55,7 @@ Run 처리 흐름은 다음과 같습니다.
 - Celery
 - Pytest
 - Docker Compose
+- GitHub Actions
 - uv
 
 ## 주요 기능
@@ -68,6 +71,7 @@ Run 처리 흐름은 다음과 같습니다.
 - Celery worker 기반 비동기 Run 처리
 - PostgreSQL migration 관리
 - 테스트 DB 안전장치
+- GitHub Actions 기반 CI 테스트 자동화
 
 ## 주요 API
 
@@ -134,6 +138,21 @@ uv run pytest -q
 
 이 안전장치는 실수로 개발 DB나 운영 DB를 테스트가 비우는 일을 막기 위한 장치입니다.
 
+## CI
+
+이 프로젝트는 GitHub Actions로 CI를 실행합니다.
+
+CI는 push 또는 `main` 대상 pull request에서 실행되며, GitHub Actions 안에서 PostgreSQL 16 서비스를 띄우고 `agentops_test` DB를 만든 뒤 migration과 전체 테스트를 실행합니다.
+
+자동 검증 흐름은 다음과 같습니다.
+
+1. Repository checkout
+2. Python 3.13 설치
+3. uv 설치와 의존성 동기화
+4. PostgreSQL test database 생성
+5. Alembic migration 적용
+6. `pytest` 실행
+
 ## Migration
 
 현재 migration 상태 확인:
@@ -190,5 +209,6 @@ API와 Worker는 같은 PostgreSQL과 Redis를 바라봅니다.
 - Celery worker 기반 Run 처리
 - Run atomic claim
 - Docker Compose 기반 API, Worker, DB, Redis 통합 실행
+- GitHub Actions 기반 pytest CI
 
 다음 단계는 인증/인가 고도화, observability 강화, CI/CD, 배포 자동화입니다.

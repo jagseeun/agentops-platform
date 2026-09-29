@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentops-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agentops-worker
+  template:
+    metadata:
+      labels:
+        app: agentops-worker
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/jagseeun/agentops-platform:latest
+          command: 
+            - uv
+            - run
+            - celery
+            - -A
+            - app.workers.celery_app
+            - worker
+            - --loglevel=INFO
+            - --pool=solo
+          envFrom:
+            - configMapRef:
+                name: agentops-config
+            - secretRef:
+                name: agentops-secret

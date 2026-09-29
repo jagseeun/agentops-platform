@@ -103,6 +103,110 @@ ghcr.io/jagseeun/agentops-platform:latest
 
 feature branch 작업을 검증하려면 `main`을 대상으로 PR을 열어야 한다.
 
+## Kubernetes manifest
+
+Kubernetes manifest는 GHCR에 올라간 Docker image를 실제 실행 환경에서 어떻게 띄울지 설명하는 파일이다.
+
+현재 manifest는 실제 운영 배포 완성본이 아니라, API와 Worker를 Kubernetes에서 실행하기 위한 초안이다.
+
+파일 위치:
+
+```text
+deploy/kubernetes/
+```
+
+현재 파일은 다음과 같다.
+
+```text
+configmap.yaml
+secret.example.yaml
+api-deployment.yaml
+worker-deployment.yaml
+api-service.yaml
+```
+
+### ConfigMap
+
+파일:
+
+```text
+deploy/kubernetes/configmap.yaml
+```
+
+역할:
+
+- 공개해도 되는 환경 변수를 관리한다.
+- 현재는 `CELERY_BROKER_URL`을 담는다.
+
+### Secret example
+
+파일:
+
+```text
+deploy/kubernetes/secret.example.yaml
+```
+
+역할:
+
+- 민감한 환경 변수의 예시를 보여준다.
+- 현재는 `DATABASE_URL` 예시를 담는다.
+- 실제 비밀번호나 실제 DB URL은 public repository에 넣지 않는다.
+
+### API Deployment
+
+파일:
+
+```text
+deploy/kubernetes/api-deployment.yaml
+```
+
+역할:
+
+- FastAPI API 컨테이너를 실행한다.
+- GHCR image인 `ghcr.io/jagseeun/agentops-platform:latest`를 사용한다.
+- `/health` endpoint로 readiness check를 한다.
+- ConfigMap과 Secret에서 환경 변수를 가져온다.
+
+### Worker Deployment
+
+파일:
+
+```text
+deploy/kubernetes/worker-deployment.yaml
+```
+
+역할:
+
+- Celery worker 컨테이너를 실행한다.
+- API와 같은 GHCR image를 사용한다.
+- 실행 command만 Celery worker 명령으로 바꾼다.
+- ConfigMap과 Secret에서 환경 변수를 가져온다.
+
+### API Service
+
+파일:
+
+```text
+deploy/kubernetes/api-service.yaml
+```
+
+역할:
+
+- `app: agentops-api` label이 붙은 API Pod를 찾는다.
+- Kubernetes 내부에서 `agentops-api`라는 Service 이름으로 접근할 수 있게 한다.
+- 8000번 port를 API 컨테이너의 8000번 port로 연결한다.
+
+### 아직 남은 것
+
+현재 manifest는 초안이므로 실제 배포 전에 다음이 더 필요하다.
+
+- 실제 DB URL과 Redis URL 결정
+- 실제 Secret 생성 방식 결정
+- GHCR image 접근 권한 확인
+- migration을 언제 실행할지 결정
+- 외부 트래픽을 받을 Ingress 또는 LoadBalancer 결정
+- Kubernetes 클러스터에서 실제 apply 검증
+
 ## 현재 흐름
 
 현재 검증 흐름은 다음과 같다.

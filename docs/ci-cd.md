@@ -6,6 +6,7 @@
 
 - 테스트 자동 실행
 - Docker image build 확인
+- GitHub Container Registry push
 
 ## CI와 CD의 차이
 
@@ -15,7 +16,7 @@ CI는 코드를 main에 넣기 전에 프로젝트가 깨지지 않았는지 자
 
 CD는 테스트를 통과한 코드를 실제 실행 환경에 배포하는 과정이다.
 
-아직 이 프로젝트는 실제 서버나 Kubernetes 클러스터에 자동 배포하지 않는다. 지금은 CD로 가기 전 단계로 Docker image가 정상적으로 build 되는지만 확인한다.
+아직 이 프로젝트는 실제 서버나 Kubernetes 클러스터에 자동 배포하지 않는다. 지금은 CD로 가기 전 단계로 Docker image build와 GHCR push까지 확인한다.
 
 ## 현재 GitHub Actions
 
@@ -52,10 +53,44 @@ CD는 테스트를 통과한 코드를 실제 실행 환경에 배포하는 과�
 
 - repository를 checkout한다.
 - Dockerfile로 image를 build한다.
+- main push일 때 GitHub Container Registry에 image를 push한다.
 
-아직 image를 registry에 push하지는 않는다.
+PR에서는 image build까지만 확인한다.
 
-현재 목표는 "이 앱이 컨테이너로 포장 가능한 상태인가"를 확인하는 것이다.
+main에 merge된 뒤 push 이벤트가 발생하면 GHCR에 image를 올린다.
+
+현재 목표는 "이 앱이 컨테이너로 포장 가능하고, GitHub의 image 저장소에 올릴 수 있는 상태인가"를 확인하는 것이다.
+
+## GHCR
+
+GHCR은 GitHub Container Registry의 줄임말이다.
+
+GitHub repository가 source code를 저장하는 곳이라면, GHCR은 Docker image를 저장하는 곳이다.
+
+현재 image 이름은 workflow에서 다음 값으로 만든다.
+
+```yaml
+IMAGE_NAME: ghcr.io/${{ github.repository }}
+```
+
+이 repository에서는 실제로 다음 이름이 된다.
+
+```text
+ghcr.io/jagseeun/agentops-platform
+```
+
+Docker build 단계에서는 같은 image에 두 개의 tag를 붙인다.
+
+```text
+ghcr.io/jagseeun/agentops-platform:<commit-sha>
+ghcr.io/jagseeun/agentops-platform:latest
+```
+
+`latest`는 가장 최근에 main에서 build된 image를 쉽게 가리키기 위한 tag다.
+
+`commit-sha` tag는 정확히 어떤 commit으로 만든 image인지 추적하기 위한 tag다.
+
+따라서 평소에는 `latest`를 볼 수 있고, 문제가 생겼을 때는 commit sha tag로 정확한 버전을 추적할 수 있다.
 
 ## 실행 조건
 
@@ -87,22 +122,28 @@ CI 실행
   |
   v
 초록 체크 확인 후 merge
+  |
+  v
+main push
+  |
+  v
+GHCR image push
 ```
 
 ## 다음 단계
 
-다음 단계는 Docker image를 GitHub Container Registry에 push하는 것이다.
+다음 단계는 GHCR에 올라간 image를 실제 배포 설정에서 사용할 수 있게 준비하는 것이다.
 
 예상 흐름:
 
 ```text
-main merge
+GHCR image
   |
   v
-Docker image build
+Kubernetes manifest
   |
   v
-GHCR push
+API/Worker deployment
 ```
 
 그 다음 단계는 Kubernetes manifest를 작성해서 API와 Worker를 배포 가능한 형태로 정리하는 것이다.

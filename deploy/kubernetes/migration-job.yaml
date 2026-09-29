@@ -3,6 +3,7 @@ kind: Job
 metadata:
   name: agentops-migration
 spec:
+  ttlSecondsAfterFinished: 300
   backoffLimit: 1
   template:
     metadata:

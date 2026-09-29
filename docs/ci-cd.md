@@ -207,6 +207,24 @@ deploy/kubernetes/api-service.yaml
 - 외부 트래픽을 받을 Ingress 또는 LoadBalancer 결정
 - Kubernetes 클러스터에서 실제 apply 검증
 
+### Dry run 검증
+
+Docker Desktop Kubernetes context에서 다음 명령으로 manifest dry run을 확인했다.
+
+```powershell
+kubectl apply --dry-run=client -f deploy/kubernetes
+```
+
+확인된 리소스:
+
+- `deployment.apps/agentops-api`
+- `service/agentops-api`
+- `configmap/agentops-config`
+- `secret/agentops-secret`
+- `deployment.apps/agentops-worker`
+
+이 검증은 실제 리소스를 만들지 않고, Kubernetes가 manifest를 생성 가능한 형태로 읽을 수 있는지 확인한다.
+
 ## 현재 흐름
 
 현재 검증 흐름은 다음과 같다.

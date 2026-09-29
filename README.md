@@ -75,7 +75,8 @@ Run 처리 흐름은 다음과 같습니다.
 - 테스트 DB 안전장치
 - GitHub Actions 기반 CI 테스트 자동화
 - Docker image build와 GHCR publishing workflow
-- Kubernetes manifest 초안
+- Kubernetes manifest와 local Kubernetes 검증
+- Neon DB 연결 검증
 
 ## 주요 API
 
@@ -177,11 +178,11 @@ ghcr.io/jagseeun/agentops-platform:<commit-sha>
 
 `latest`는 최신 main image를 가리키고, `commit-sha` tag는 특정 commit으로 만든 image를 추적하기 위해 사용합니다.
 
-아직 실제 Kubernetes 클러스터에 자동 배포하는 단계까지는 구현하지 않았습니다.
+아직 GitHub Actions에서 Kubernetes 클러스터로 자동 rollout하는 단계까지는 구현하지 않았습니다.
 
 ## Kubernetes Manifests
 
-Kubernetes 배포 초안은 다음 폴더에 있습니다.
+Kubernetes manifest는 다음 폴더에 있습니다.
 
 ```text
 deploy/kubernetes/
@@ -199,6 +200,7 @@ postgres-deployment.yaml
 postgres-service.yaml
 redis-deployment.yaml
 redis-service.yaml
+migration-job.yaml
 ```
 
 로컬 Docker Desktop Kubernetes에서 dry-run 검증을 완료했습니다.
@@ -207,7 +209,32 @@ redis-service.yaml
 kubectl apply --dry-run=client -f deploy/kubernetes
 ```
 
+또한 local Kubernetes에 실제로 적용해서 다음 흐름을 검증했습니다.
+
+- API, Worker, Postgres, Redis Pod Running
+- API `/health` 응답 확인
+- Worker Redis 연결 확인
+- Alembic migration 적용
+- API로 Workspace 생성
+- Postgres Pod에서 row 직접 조회
+
 PostgreSQL과 Redis manifest는 로컬 Kubernetes 검증용입니다. 운영 환경에서는 Neon DB 같은 managed PostgreSQL과 managed Redis 사용을 전제로 합니다.
+
+## Neon DB
+
+Neon DB를 managed PostgreSQL로 연결했습니다.
+
+검증한 내용은 다음과 같습니다.
+
+- 로컬 FastAPI에서 Neon DB 연결
+- Neon DB에 Alembic migration 적용
+- 로컬 FastAPI에서 Workspace 생성
+- Neon DB row 직접 조회
+- Kubernetes Secret을 Neon `DATABASE_URL`로 교체
+- Kubernetes API/Worker rollout restart
+- Kubernetes API에서 Neon DB로 Workspace 생성
+
+Neon connection string은 secret이므로 repository와 문서에 실제 값을 기록하지 않습니다.
 
 ## Migration
 
@@ -251,6 +278,8 @@ API와 Worker는 같은 PostgreSQL과 Redis를 바라봅니다.
 - `notes/day16-retry-policy.md`
 - `notes/day18-worker-shutdown-check.md`
 - `notes/day20-capstone-check.md`
+- `docs/ci-cd.md`
+- `notes/deployment-pipeline-progress.md`
 
 ## 현재 상태
 
@@ -267,6 +296,8 @@ API와 Worker는 같은 PostgreSQL과 Redis를 바라봅니다.
 - Docker Compose 기반 API, Worker, DB, Redis 통합 실행
 - GitHub Actions 기반 pytest CI
 - GHCR image publishing workflow
-- Kubernetes manifest 초안과 dry-run 검증
+- Kubernetes manifest와 local apply 검증
+- Kubernetes migration Job
+- Neon DB 연결 및 Kubernetes API에서 Neon write 검증
 
-다음 단계는 인증/인가 고도화, observability 강화, 실제 Kubernetes 배포 검증, cloud database 연결입니다.
+다음 단계는 GitHub Actions에서 Kubernetes rollout 자동화, managed Redis 검토, Ingress/LoadBalancer 외부 접속, 인증/인가 고도화, observability 강화입니다.

@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentops-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agentops-api
+  template:
+    metadata:
+      labels:
+        app: agentops-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/jagseeun/agentops-platform:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: agentops-config
+            - secretRef:
+                name: agentops-secret
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10

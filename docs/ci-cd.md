@@ -225,6 +225,70 @@ kubectl apply --dry-run=client -f deploy/kubernetes
 
 이 검증은 실제 리소스를 만들지 않고, Kubernetes가 manifest를 생성 가능한 형태로 읽을 수 있는지 확인한다.
 
+### Local apply 검증
+
+Docker Desktop Kubernetes에서 `agentops` namespace를 만들고 manifest를 실제로 적용했다.
+
+```powershell
+kubectl create namespace agentops
+kubectl apply -n agentops -f deploy/kubernetes
+kubectl get pods -n agentops
+```
+
+확인한 Pod:
+
+- `agentops-api`
+- `agentops-worker`
+- `postgres`
+- `redis`
+
+모든 Pod가 `Running` 상태가 되는 것을 확인했다.
+
+API는 port-forward로 로컬에서 접근했다.
+
+```powershell
+kubectl port-forward -n agentops service/agentops-api 8000:8000
+Invoke-RestMethod http://127.0.0.1:8000/health
+```
+
+`/health` 응답은 `ok`였다.
+
+Worker 로그에서 Redis 연결도 확인했다.
+
+```text
+Connected to redis://redis:6379/0
+celery ready
+```
+
+Kubernetes 안의 새 Postgres DB에 Alembic migration을 적용했다.
+
+```powershell
+kubectl exec -n agentops deployment/agentops-api -- uv run alembic upgrade head
+```
+
+그 다음 API를 통해 Workspace를 생성했다.
+
+```powershell
+$slug = "k8s-" + [guid]::NewGuid().ToString("N")
+$workspace = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/workspaces" -ContentType "application/json" -Body (@{ name = "K8s Smoke"; slug = $slug } | ConvertTo-Json)
+$workspace
+```
+
+생성된 row는 Postgres Pod 안에서 직접 확인했다.
+
+```powershell
+kubectl exec -n agentops deployment/postgres -- psql -U agentops -d agentops -c "select id, name, slug from workspaces;"
+```
+
+확인 결과:
+
+```text
+id | name      | slug
+1  | K8s Smoke | k8s-...
+```
+
+이 검증으로 로컬 Kubernetes에서 API, Worker, Postgres, Redis가 함께 실행되고, API 요청이 Kubernetes 안의 Postgres에 저장되는 흐름을 확인했다.
+
 ## 현재 흐름
 
 현재 검증 흐름은 다음과 같다.

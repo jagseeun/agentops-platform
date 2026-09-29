@@ -354,6 +354,44 @@ uv run python -c "from app.db.session import engine; print(engine.connect().exec
 
 이 검증으로 로컬 FastAPI 코드가 Neon PostgreSQL에 연결되고, migration과 write/read가 정상 동작하는 것을 확인했다.
 
+### Kubernetes에서 Neon DB 사용 검증
+
+Kubernetes API/Worker가 로컬 Postgres Pod가 아니라 Neon DB를 바라보도록 `agentops-secret`을 교체했다.
+
+실제 Neon connection string은 비밀값이므로 manifest나 문서에 기록하지 않는다.
+
+사용한 흐름:
+
+```powershell
+kubectl delete secret -n agentops agentops-secret
+kubectl create secret generic agentops-secret -n agentops --from-literal=DATABASE_URL="<neon-database-url>"
+kubectl rollout restart deployment/agentops-api -n agentops
+kubectl rollout restart deployment/agentops-worker -n agentops
+```
+
+Secret 변경 후 기존 Pod는 자동으로 새 환경 변수를 읽지 않으므로 API와 Worker Deployment를 재시작했다.
+
+재시작 후 port-forward를 통해 Kubernetes API에 요청을 보냈다.
+
+```powershell
+$slug = "k8s-neon-" + [guid]::NewGuid().ToString("N")
+$workspace = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/workspaces" -ContentType "application/json" -Body (@{ name = "K8s Neon Smoke"; slug = $slug } | ConvertTo-Json)
+$workspace
+```
+
+확인 결과:
+
+```text
+id: 2
+name: K8s Neon Smoke
+slug: k8s-neon-...
+status: active
+```
+
+이전에 로컬 FastAPI로 Neon DB에 생성한 Workspace가 `id: 1`이었고, Kubernetes API로 생성한 Workspace가 `id: 2`가 되었다.
+
+이 결과로 로컬 FastAPI와 Kubernetes API가 같은 Neon DB를 바라보고 있음을 확인했다.
+
 ### Cleanup
 
 로컬 Kubernetes 실습 리소스는 namespace 단위로 삭제한다.

@@ -1,0 +1,50 @@
+name: Deploy Kubernetes
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "GHCR image tag to deploy"
+        required: true
+        default: "latest"
+      namespace:
+        description: "Kubernetes namespace"
+        required: true
+        default: "agentops"
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  rollout:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Set up Kubectl
+        uses: azure/setup-kubectl@v4
+      
+      - name: Configure kubeconfig
+        env: 
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: | 
+          mkdir -p "$HOME/.kube"
+          printf '%s' "$KUBE_CONFIG" > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+      
+      - name: Show Kubernetes context
+        run: kubectl config current-context
+      
+      - name: Roll out API and Worker
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          NAMESPACE: ${{ inputs.namespace }}
+        run: |
+          IMAGE="$IMAGE_NAME:$IMAGE_TAG"
+          kubectl set image deployment/agentops-api api="$IMAGE" -n "$NAMESPACE"
+          kubectl set image deployment/agentops-worker worker="$IMAGE" -n "$NAMESPACE"
+
+          kubectl rollout status deployment/agentops-api -n "$NAMESPACE" --timeout=120s
+          kubectl rollout status deployment/agentops-worker -n "$NAMESPACE" --timeout=120s

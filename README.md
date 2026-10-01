@@ -83,6 +83,8 @@ Run 처리 흐름은 다음과 같습니다.
 | Method | Path | 설명 |
 | --- | --- | --- |
 | `GET` | `/health` | API 상태 확인 |
+| `GET` | `/health/live` | API 프로세스 liveness 확인 |
+| `GET` | `/health/ready` | DB 연결을 포함한 readiness 확인 |
 | `POST` | `/workspaces` | Workspace 생성 |
 | `POST` | `/agents` | Agent 생성 |
 | `GET` | `/workspaces/{workspace_id}/agents` | Workspace의 Agent 목록 조회 |
@@ -123,6 +125,8 @@ API 상태를 확인합니다.
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/health
+Invoke-RestMethod http://127.0.0.1:8000/health/live
+Invoke-RestMethod http://127.0.0.1:8000/health/ready
 ```
 
 정상 응답:
@@ -139,6 +143,24 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 
 ```powershell
 uv run pytest -q
+```
+
+로컬에서 테스트 DB 준비와 pytest 실행을 함께 처리하려면 다음 helper를 사용할 수 있습니다.
+
+```powershell
+uv run python tools/test.py -q
+```
+
+특정 테스트 파일만 실행할 수도 있습니다.
+
+```powershell
+uv run python tools/test.py tests/workspaces/test_health.py -q
+```
+
+테스트 DB가 꼬였을 때는 `_test`로 끝나는 테스트 DB에 한해서 삭제 후 재생성할 수 있습니다.
+
+```powershell
+uv run python tools/test.py --recreate-db -q
 ```
 
 이 안전장치는 실수로 개발 DB나 운영 DB를 테스트가 비우는 일을 막기 위한 장치입니다.
@@ -178,7 +200,9 @@ ghcr.io/jagseeun/agentops-platform:<commit-sha>
 
 `latest`는 최신 main image를 가리키고, `commit-sha` tag는 특정 commit으로 만든 image를 추적하기 위해 사용합니다.
 
-아직 GitHub Actions에서 Kubernetes 클러스터로 자동 rollout하는 단계까지는 구현하지 않았습니다.
+Kubernetes rollout workflow도 추가했습니다. 이 workflow는 수동 실행 시 GHCR image tag를 받아 API/Worker Deployment image를 갱신합니다.
+
+실제 실행에는 GitHub Actions secret인 `KUBE_CONFIG`와 GitHub Actions에서 접근 가능한 Kubernetes 클러스터가 필요합니다. 현재 로컬 Docker Desktop Kubernetes는 GitHub-hosted runner에서 직접 접근하기 어렵기 때문에, workflow 구조만 준비된 상태입니다.
 
 ## Kubernetes Manifests
 
@@ -212,11 +236,15 @@ kubectl apply --dry-run=client -f deploy/kubernetes
 또한 local Kubernetes에 실제로 적용해서 다음 흐름을 검증했습니다.
 
 - API, Worker, Postgres, Redis Pod Running
-- API `/health` 응답 확인
+- API `/health`, `/health/live`, `/health/ready` 응답 확인
 - Worker Redis 연결 확인
 - Alembic migration 적용
 - API로 Workspace 생성
 - Postgres Pod에서 row 직접 조회
+- API Service `LoadBalancer` 노출
+- API readinessProbe `/health/ready` 적용
+- API livenessProbe `/health/live` 적용
+- API, Worker, Postgres, Redis resource requests/limits 적용
 
 PostgreSQL과 Redis manifest는 로컬 Kubernetes 검증용입니다. 운영 환경에서는 Neon DB 같은 managed PostgreSQL과 managed Redis 사용을 전제로 합니다.
 
@@ -296,8 +324,13 @@ API와 Worker는 같은 PostgreSQL과 Redis를 바라봅니다.
 - Docker Compose 기반 API, Worker, DB, Redis 통합 실행
 - GitHub Actions 기반 pytest CI
 - GHCR image publishing workflow
+- GitHub Actions 기반 Kubernetes rollout workflow 초안
 - Kubernetes manifest와 local apply 검증
 - Kubernetes migration Job
+- Kubernetes LoadBalancer Service 외부 접속 검증
+- Kubernetes readiness/liveness probe와 resource limits
+- `/health/live`, `/health/ready` health check 분리
 - Neon DB 연결 및 Kubernetes API에서 Neon write 검증
+- 로컬 테스트 DB 준비용 `tools/test.py`
 
-다음 단계는 GitHub Actions에서 Kubernetes rollout 자동화, managed Redis 검토, Ingress/LoadBalancer 외부 접속, 인증/인가 고도화, observability 강화입니다.
+다음 단계는 실제 접근 가능한 Kubernetes 클러스터에서 rollout workflow를 검증하고, managed Redis 검토, 인증/인가 고도화, observability 강화를 진행하는 것입니다.

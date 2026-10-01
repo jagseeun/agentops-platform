@@ -77,6 +77,7 @@ Run 처리 흐름은 다음과 같습니다.
 - Docker image build와 GHCR publishing workflow
 - Kubernetes manifest와 local Kubernetes 검증
 - Neon DB 연결 검증
+- `X-Request-Id` 기반 request 추적
 
 ## 주요 API
 
@@ -134,6 +135,8 @@ Invoke-RestMethod http://127.0.0.1:8000/health/ready
 ```json
 {"status":"ok"}
 ```
+
+모든 API 응답에는 요청 추적용 `X-Request-Id` header가 포함됩니다. 요청에 `X-Request-Id`를 직접 보내면 같은 값을 응답에 다시 내려주고, 없으면 서버가 새 값을 생성합니다.
 
 ## 테스트
 
@@ -330,7 +333,8 @@ API와 Worker는 같은 PostgreSQL과 Redis를 바라봅니다.
 - Kubernetes LoadBalancer Service 외부 접속 검증
 - Kubernetes readiness/liveness probe와 resource limits
 - `/health/live`, `/health/ready` health check 분리
+- `X-Request-Id` request tracking middleware
 - Neon DB 연결 및 Kubernetes API에서 Neon write 검증
 - 로컬 테스트 DB 준비용 `tools/test.py`
 
-다음 단계는 실제 접근 가능한 Kubernetes 클러스터에서 rollout workflow를 검증하고, managed Redis 검토, 인증/인가 고도화, observability 강화를 진행하는 것입니다.
+다음 단계는 request id를 로그에 연결하는 structured logging, 실제 접근 가능한 Kubernetes 클러스터에서 rollout workflow 검증, managed Redis 검토, 인증/인가 고도화를 진행하는 것입니다.

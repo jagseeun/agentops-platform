@@ -1,4 +1,6 @@
-from fastapi import FastAPI, HTTPException, status
+from uuid import uuid4
+
+from fastapi import FastAPI, HTTPException, Request, status
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -8,6 +10,17 @@ from app.api.routes.runs import router as runs_router
 from app.db.session import engine
 
 app = FastAPI(title="AgentOps Mini Platform")
+
+REQUEST_ID_HEADER = "X-Request-Id"
+
+@app.middleware("http")
+async def add_request_id_header(request: Request, call_next):
+    request_id = request.headers.get(REQUEST_ID_HEADER)
+    if request_id is None:
+        request_id = str(uuid4())
+    response = await call_next(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+    return response
 
 app.include_router(workspaces_router)
 app.include_router(agent_router)

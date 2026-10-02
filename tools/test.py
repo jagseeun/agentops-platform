@@ -87,8 +87,10 @@ def _ensure_test_database(test_url: URL, *, recreate: bool) -> None:
     if database_name is None:
         raise RuntimeError("TEST_DATABASE_URL must include a database name")
 
-    admin_engine = create_engine(_database_admin_url(test_url))
-
+    admin_engine = create_engine(
+        _database_admin_url(test_url),
+        connect_args={"connect_timeout":5}
+    )
     try:
         if recreate:
             print(f"Recreating test database: {database_name}")
@@ -135,9 +137,11 @@ def main() -> int:
     try:
         _ensure_test_database(test_url, recreate=args.recreate_db)
     except OperationalError as exc:
-        raise RuntimeError(
-            "Could not connect to Postgres. Start it first with: docker compose up -d postgres"
-        ) from exc
+        print(
+            "Could not connect to Postgres. Start it first with: docker compose up -d postgres",
+            file=sys.stderr,
+        )
+        return 1
     except ProgrammingError as exc:
         raise RuntimeError("Could not prepare the test database") from exc
 

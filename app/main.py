@@ -5,8 +5,11 @@ from time import perf_counter
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request, status
+from prometheus_client import make_asgi_app
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+
+from app.core.metrics import record_http_request
 
 from app.api.routes.workspaces import router as workspaces_router
 from app.api.routes.agents import router as agent_router
@@ -14,6 +17,9 @@ from app.api.routes.runs import router as runs_router
 from app.db.session import engine
 
 app = FastAPI(title="AgentOps Mini Platform")
+
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
 
 REQUEST_ID_HEADER = "X-Request-Id"
 request_logger = logging.getLogger("uvicorn.error.agentops.request")
@@ -28,7 +34,16 @@ async def add_request_id_header(request: Request, call_next):
     try:
         response = await call_next(request)
     except Exception as exc:
-        duration_ms = round((perf_counter()-started_at)*1000, 2)
+        duration_seconds = perf_counter() - started_at
+        duration_ms = round(duration_seconds*1000, 2)
+        route_path = getattr(request.scope.get("route"), "path", "unmatched")
+        
+        record_http_request(
+            method=request.method,
+            route=route_path,
+            status_code=500,
+            duration_seconds=duration_seconds,
+        )
         request_logger.exception(
             json.dumps(
                 {
@@ -43,8 +58,19 @@ async def add_request_id_header(request: Request, call_next):
             )
         )
         raise
-    duration_ms = round((perf_counter()-started_at)*1000,2)
+    
+    duration_seconds = perf_counter()-started_at
+    duration_ms = round(duration_seconds*1000,2)
+    route_path = getattr(request.scope.get("route"), "path", "unmatched")
+    
+    record_http_request(
+        method=request.method,
+        route=route_path,
+        status_code=response.status_code,
+        duration_seconds=duration_seconds,
+    )
     response.headers[REQUEST_ID_HEADER] = request_id
+    
     request_logger.info(
         json.dumps(
             {

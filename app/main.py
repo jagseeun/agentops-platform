@@ -24,8 +24,26 @@ async def add_request_id_header(request: Request, call_next):
     if request_id is None:
         request_id = str(uuid4())
     started_at = perf_counter()
-    response = await call_next(request)
-    duration_ms = round((perf_counter()-started_at)*1000, 2)
+    
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        duration_ms = round((perf_counter()-started_at)*1000, 2)
+        request_logger.exception(
+            json.dumps(
+                {
+                    "event": "request_failed",
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": 500,
+                    "duration_ms": duration_ms,
+                    "error_type": type(exc).__name__,
+                }
+            )
+        )
+        raise
+    duration_ms = round((perf_counter()-started_at)*1000,2)
     response.headers[REQUEST_ID_HEADER] = request_id
     request_logger.info(
         json.dumps(
